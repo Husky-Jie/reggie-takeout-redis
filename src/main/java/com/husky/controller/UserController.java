@@ -7,6 +7,7 @@ import com.husky.entity.User;
 import com.husky.service.UserService;
 import com.husky.util.ValidateCodeUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,6 +17,7 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpSession;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by IntelliJ IDEA.
@@ -30,6 +32,9 @@ public class UserController {
     @Resource
     private UserService userService;
 
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
     @PostMapping("/sendMsg")
     public R<String> sendMsg(@RequestBody User user, HttpSession session){
         // 获取手机号码
@@ -40,8 +45,12 @@ public class UserController {
             String  code = ValidateCodeUtils.generateValidateCode(4).toString();
             // 控制台打印验证码
             log.info("code={}",code);
+
             // 将验证码保存到session
-            session.setAttribute(phone,code);
+            //session.setAttribute(phone,code);
+
+            // 将验证码保存到redis缓存中,设置有效期为5分钟，TimeUnit.MINUTES为单位（分钟）
+            stringRedisTemplate.opsForValue().set(phone,code,5, TimeUnit.MINUTES);
 
             return R.success("验证码生成成功");
         }
@@ -57,7 +66,10 @@ public class UserController {
         String code = map.get("code");
 
         // 从session获取验证码进行比对
-        String codeSession = (String) session.getAttribute(phone);
+        // String codeSession = (String) session.getAttribute(phone);
+
+        // 从redis缓存中获取验证码
+        String codeSession = stringRedisTemplate.opsForValue().get(phone);
 
         LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(User::getPhone,phone);
@@ -69,6 +81,10 @@ public class UserController {
                 return R.error("该账户已被禁用");
             }else {
                 session.setAttribute("user",one.getId());
+
+                // 登录成功，从redis中删除验证码
+                stringRedisTemplate.delete(phone);
+
                 return R.success(one);
             }
         }else {
@@ -79,6 +95,10 @@ public class UserController {
             userService.save(one);
         }
         session.setAttribute("user",one.getId());
+
+        // 登录成功，从redis中删除验证码
+        stringRedisTemplate.delete(phone);
+
         return R.success(one);
     }
 

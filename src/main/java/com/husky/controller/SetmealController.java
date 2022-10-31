@@ -11,11 +11,14 @@ import com.husky.service.CategoryService;
 import com.husky.service.SetmealDishService;
 import com.husky.service.SetmealService;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -34,11 +37,16 @@ public class SetmealController {
     private CategoryService categoryService;
     @Resource
     private SetmealDishService setmealDishService;
+    @Resource
+    private RedisTemplate<Object,Object> redisTemplate;
 
     // 套餐新增
     @PostMapping
     public R<String> insertSet(@RequestBody SetmealDto setmealDto){
         setmealService.addSet(setmealDto);
+        // 删除缓存，保持redis和数据库保持一致性
+        String key = "setMeal_" + setmealDto.getCategoryId() + "_1";
+        redisTemplate.delete(key);
         return R.success("新增套餐成功");
     }
 
@@ -77,6 +85,9 @@ public class SetmealController {
     @PutMapping
     public R<String> update(@RequestBody SetmealDto setmealDto) {
         setmealService.updateSet(setmealDto);
+        // 删除缓存，保持redis和数据库保持一致性
+        String key = "setMeal_" + setmealDto.getCategoryId() + "_1";
+        redisTemplate.delete(key);
         return R.success("套餐修改成功");
     }
 
@@ -88,10 +99,14 @@ public class SetmealController {
             Setmeal byId = setmealService.getById(id);
             byId.setStatus(sta);
             setmealService.updateById(byId);
+            // 删除缓存，保持redis和数据库保持一致性
+            String key = "setMeal_" + byId.getCategoryId() + "_1";
+            redisTemplate.delete(key);
         }
         return R.success("套餐状态修改成功");
     }
 
+    // 删除套餐
     @DeleteMapping
     @Transactional
     public R<String> delete(@RequestParam List<Long> ids){
@@ -109,13 +124,26 @@ public class SetmealController {
         setmealDishService.remove(queryWrapper);
         return R.success("套餐删除成功");
     }
+
+    // 查询套餐信息
     @GetMapping("/list")
     public R<List<Setmeal>> listR(Setmeal setmeal){
+        // 查询redis缓存中有无套餐数据
+        List<Setmeal> list = null;
+        String keys = "setMeal_" + setmeal.getCategoryId() + "_" + setmeal.getStatus();
+        redisTemplate.setKeySerializer(new StringRedisSerializer());
+        list = (List<Setmeal>)redisTemplate.opsForValue().get(keys);
+        // 若查询redis有数据，则返回
+        if (list != null) {
+            return R.success(list);
+        }
         LambdaQueryWrapper<Setmeal> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(setmeal.getCategoryId()!=null,Setmeal::getCategoryId,setmeal.getCategoryId())
                     .eq(setmeal.getStatus()!=null,Setmeal::getStatus,setmeal.getStatus());
         queryWrapper.orderByDesc(Setmeal::getUpdateTime);
-        List<Setmeal> list = setmealService.list(queryWrapper);
+        list = setmealService.list(queryWrapper);
+        // 若查询redis中无数据，则保存缓存
+        redisTemplate.opsForValue().set(keys,list,60, TimeUnit.MINUTES);
         return R.success(list);
     }
 }

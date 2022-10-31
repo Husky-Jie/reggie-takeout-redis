@@ -12,6 +12,7 @@ import com.husky.service.DishFlavorService;
 import com.husky.service.DishService;
 import lombok.SneakyThrows;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +29,8 @@ import java.util.stream.Collectors;
 @Service
 public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements DishService {
 
+    @Resource
+    private RedisTemplate<Object,Object> redisTemplate;
     @Resource
     private DishFlavorService dishFlavorService;
 
@@ -110,5 +113,4 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
         queryWrapper.in(DishFlavor::getDishId,ids);
         dishFlavorService.remove(queryWrapper);
     }
-
 }
