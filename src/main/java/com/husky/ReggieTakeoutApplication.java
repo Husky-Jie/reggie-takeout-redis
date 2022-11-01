@@ -9,7 +9,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @Slf4j
 @SpringBootApplication
 @EnableTransactionManagement
-@EnableCaching
+@EnableCaching  // 开启spring cache注解方式缓存功能
 public class ReggieTakeoutApplication {
 
     public static void main(String[] args) {
