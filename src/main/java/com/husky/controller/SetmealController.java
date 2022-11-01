@@ -11,6 +11,8 @@ import com.husky.service.CategoryService;
 import com.husky.service.SetmealDishService;
 import com.husky.service.SetmealService;
 import org.springframework.beans.BeanUtils;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,12 +42,11 @@ public class SetmealController {
     private RedisTemplate<Object,Object> redisTemplate;
 
     // 套餐新增
+    // @CacheEvict 多条数据从缓存中删除
+    @CacheEvict(value = "setMeal", allEntries = true)
     @PostMapping
     public R<String> insertSet(@RequestBody SetmealDto setmealDto){
         setmealService.addSet(setmealDto);
-        // 删除缓存，保持redis和数据库保持一致性
-        String key = "setMeal_" + setmealDto.getCategoryId() + "_1";
-        redisTemplate.delete(key);
         return R.success("新增套餐成功");
     }
 
@@ -81,16 +82,17 @@ public class SetmealController {
     }
 
     // 套餐修改保存
+    // @CacheEvict 多条数据从缓存中删除
+    @CacheEvict(value = "setMeal", allEntries = true)
     @PutMapping
     public R<String> update(@RequestBody SetmealDto setmealDto) {
         setmealService.updateSet(setmealDto);
-        // 删除缓存，保持redis和数据库保持一致性
-        String key = "setMeal_" + setmealDto.getCategoryId() + "_1";
-        redisTemplate.delete(key);
         return R.success("套餐修改成功");
     }
 
     // 起售停售和批量起售停售
+    // @CacheEvict 多条数据从缓存中删除
+    @CacheEvict(value = "setMeal", allEntries = true)
     @PostMapping("/status/{sta}")
     public R<String> Status(@PathVariable Integer sta, @RequestParam List<Long> ids){
         for (Long id :
@@ -98,9 +100,6 @@ public class SetmealController {
             Setmeal byId = setmealService.getById(id);
             byId.setStatus(sta);
             setmealService.updateById(byId);
-            // 删除缓存，保持redis和数据库保持一致性
-            String key = "setMeal_" + byId.getCategoryId() + "_1";
-            redisTemplate.delete(key);
         }
         return R.success("套餐状态修改成功");
     }
@@ -125,24 +124,15 @@ public class SetmealController {
     }
 
     // 查询套餐信息
+    // 使用spring Cache的@Cacheable注解完成缓存的存放功能
+    @Cacheable(value = "setMeal", key = "#p0.categoryId + 'setMeal_1'")
     @GetMapping("/list")
     public R<List<Setmeal>> listR(Setmeal setmeal){
-        // 查询redis缓存中有无套餐数据
-        List<Setmeal> list = null;
-        String keys = "setMeal_" + setmeal.getCategoryId() + "_" + setmeal.getStatus();
-        redisTemplate.setKeySerializer(new StringRedisSerializer());
-        list = (List<Setmeal>)redisTemplate.opsForValue().get(keys);
-        // 若查询redis有数据，则返回
-        if (list != null) {
-            return R.success(list);
-        }
         LambdaQueryWrapper<Setmeal> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(setmeal.getCategoryId()!=null,Setmeal::getCategoryId,setmeal.getCategoryId())
                     .eq(setmeal.getStatus()!=null,Setmeal::getStatus,setmeal.getStatus());
         queryWrapper.orderByDesc(Setmeal::getUpdateTime);
-        list = setmealService.list(queryWrapper);
-        // 若查询redis中无数据，则保存缓存
-        redisTemplate.opsForValue().set(keys,list,60, TimeUnit.MINUTES);
+        List<Setmeal> list = setmealService.list(queryWrapper);
         return R.success(list);
     }
 }
