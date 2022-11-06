@@ -6,6 +6,10 @@ import com.husky.common.BaseContext;
 import com.husky.common.R;
 import com.husky.entity.AddressBook;
 import com.husky.service.AddressBookService;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiImplicitParam;
+import io.swagger.annotations.ApiImplicitParams;
+import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,11 +25,13 @@ import java.util.List;
 @RestController
 @RequestMapping("/addressBook")
 @Slf4j
+@Api(tags = "地址簿相关接口")
 public class AddressBookController {
     @Resource
     private AddressBookService addressBookService;
 
     // 显示地址
+    @ApiOperation("显示所有地址列表")
     @GetMapping("/list")
     public R<List<AddressBook>> listR() {
         LambdaQueryWrapper<AddressBook> queryWrapper = new LambdaQueryWrapper<>();
@@ -35,7 +41,11 @@ public class AddressBookController {
     }
 
     // 添加地址
+    @ApiOperation("添加地址")
     @PostMapping
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "addressBook",value = "地址簿信息",dataType = "AddressBook")
+    })
     public R<String> addAddress(@RequestBody AddressBook addressBook) {
         addressBook.setUserId(BaseContext.getCurrentId());
         addressBookService.save(addressBook);
@@ -44,7 +54,11 @@ public class AddressBookController {
     }
 
     // 设置默认地址
+    @ApiOperation("设置默认地址")
     @PutMapping("/default")
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "addressBook",value = "地址簿信息",dataType = "AddressBook")
+    })
     public R<AddressBook> defaultAddress(@RequestBody AddressBook addressBook) {
         // 将该用户的所有地址都设为不是默认状态
         LambdaUpdateWrapper<AddressBook> queryWrapper = new LambdaUpdateWrapper<>();
@@ -59,7 +73,11 @@ public class AddressBookController {
     }
 
     // 编辑收获地址回显
+    @ApiOperation("编辑收获地址回显")
     @GetMapping("/{id}")
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "id",value = "地址id",dataType = "Long")
+    })
     public R<AddressBook> getAddress(@PathVariable Long id){
         AddressBook byId = addressBookService.getById(id);
         if (byId != null) {
@@ -70,7 +88,11 @@ public class AddressBookController {
     }
 
     // 修改保存地址信息
+    @ApiOperation("修改保存地址信息")
     @PutMapping
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "addressBook",value = "地址簿信息",dataType = "AddressBook")
+    })
     public R<String> put(@RequestBody AddressBook addressBook){
         addressBook.setUserId(BaseContext.getCurrentId());
         addressBookService.updateById(addressBook);
@@ -78,13 +100,18 @@ public class AddressBookController {
     }
 
     // 删除地址信息
+    @ApiOperation("删除地址信息")
     @DeleteMapping
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "ids",value = "地址ids",dataType = "Long")
+    })
     public R<String> delete(@RequestParam Long ids) {
         addressBookService.removeById(ids);
         return R.success("删除成功");
     }
 
     // 获取默认地址
+    @ApiOperation("获取默认地址")
     @GetMapping("/default")
     public R<AddressBook> getDefault(){
         LambdaQueryWrapper<AddressBook> queryWrapper = new LambdaQueryWrapper<>();
